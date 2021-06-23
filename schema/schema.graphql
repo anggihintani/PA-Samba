@@ -1,0 +1,75 @@
+const { gql } = require ('apollo-server-express')
+
+const typeDefs = gql`
+
+scalar ISODateTime
+
+scalar JSON
+
+  type Query {
+    sambas: [Samba]
+    total_remote_host: [TRemoteHost]
+    remote_host: [RemoteHost]
+    connection_timestamp: [Connection]
+    malwares: [Malware]
+    smburls: [SMBUrl]
+    classification: [Classification]
+  }
+
+  type Samba {
+    _id: String
+    connection: Int
+    connection_type: String
+    connection_protocol: String
+    connection_timestamp: ISODateTime
+    local_port: Int
+    remote_host: String
+    download: [Download]
+    offer: [Offer]
+  }
+
+  type Download {
+    download: Int
+    download_url: String
+    download_md5_hash: String
+  }
+
+  type TRemoteHost {
+    local_port: Int
+    remote_host: String
+    count: Int
+  }
+
+  type RemoteHost {
+    remote_host: String
+    count: Int
+  }
+
+  type Connection {
+    connection_timestamp: ISODateTime
+    count: Int
+  }
+
+  type Malware {
+    download_md5_hash: String
+    count: Int
+  }
+
+  type Offer {
+    offer: Int,
+    offer_url: String
+  }
+
+  type SMBUrl {
+    offer_url: String
+    remote_host: String
+    count: Int
+  }
+
+  type Classification {
+    offer_url: String
+    count: Int
+  }
+`
+
+module.exports = typeDefs
