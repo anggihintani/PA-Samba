@@ -2,10 +2,9 @@ const express = require('express')
 const { ApolloServer } = require('apollo-server-express')
 const MongoClient = require('mongodb').MongoClient
 const typeDefs = require('./schema/schema.graphql')
-const { GraphQLDateTime } = require('graphql-iso-date')
+const { GraphQLDateTime, GraphQLDate, GraphQLTime } = require('graphql-iso-date')
 const mongodb = require("mongodb")
 const Long = mongodb.Long
-const GraphQLJSON = require('graphql-type-json')
 
 const url = 'mongodb://localhost:27017'
 const client = new MongoClient(url, {useNewUrlParser: true, useUnifiedTopology: true})
@@ -19,52 +18,185 @@ const app = express()
 const resolvers = {
 
   ISODateTime: GraphQLDateTime,
-  JSON: GraphQLJSON,
+  ISODate: GraphQLDate,
+  ISOTime: GraphQLTime,
 
   Query: {
-    sambas: async () => { //mengambil semua data port 445 dari basis data
-      return Samba = await db.collection('dionaeaembedded')
-      .find({local_port:445}).limit(10).toArray()
-      .then(res => {
-          return res
-      })
+    classifications: async () => { //klasifikasi serangan pada protokol Samba
+        return Classification = await db.collection('dionaeaembedded')
+        .aggregate([
+          {
+              $match: {
+                  local_port: 445
+              }
+          },
+          {
+              $unwind: "$offer"
+          },
+          {
+              $unwind: "$offer.offer_url"
+          },
+          {
+              $group: {
+                  _id: {
+                      local_port:"$local_port",
+                      connection_protocol: "$connection_protocol",
+                      remote_host:"$remote_host",
+                      connection_timestamp: "$connection_timestamp", 
+                      offer_url:"$offer.offer_url", 
+                  }
+              }
+          },
+          {
+              $project: {
+                  local_port:"$_id.local_port",
+                  connection_protocol: "$_id.connection_protocol",
+                  remote_host:"$_id.remote_host",
+                  connection_timestamp: "$_id.connection_timestamp",
+                  offer_url:"$_id.offer_url",  
+                  classification : {
+                      $cond : {
+                          if : { 
+                              $regexMatch: {input: "$_id.offer_url", regex: /^smb/, options: "i" }
+                          },
+                          then : "Session Hijacking",
+                          else : {
+                              $cond : {
+                                  if : { 
+                                      $regexMatch: {input: "$_id.offer_url", regex: /^http/, options: "i" }
+                                  },
+                                  then : "Link Manipulation",
+                                  else : "Undefined"
+                              }
+                          }
+                      }
+                  }
+              }
+          },
+          {
+              $limit : 10000
+          }
+        ], {allowDiskUse:true}).toArray()
     },
 
-    /*connection_timestamp: async () => { //menampilkan konversi timestamp dan mengurutkannya berdasarkan perhitungan jumlah serangan yang terjadi
+    smburls: async () => { //menampilkan data offer_url yang memiliki data url "smb"
+        return SMBUrl = await db.collection('dionaeaembedded')
+        .aggregate([
+          {
+              $match: {
+                  local_port: Long.fromString("445"), 
+                  "offer.offer_url": {$regex:/^smb/}
+              }
+          },
+          {
+              $group: {
+                  _id: {
+                      offer_url:"$offer.offer_url",
+                      connection_timestamp:{
+                        $toDate: { 
+                            $multiply:["$connection_timestamp", 1000 ] }}
+                  }
+              }
+          },
+          {
+              $project: {
+                  offer_url: "$_id.offer_url",
+                  connection_timestamp: "$_id.connection_timestamp",
+                  _id: 0
+              }
+          },
+          {
+              $sort:{
+                  connection_timestamp: 1
+              }
+          }
+       ]).toArray()
+    },
+
+    top_smburl: async () => { //menampilkan top 10 data offer_url yang memiliki data url "smb"
+        return TopSMBUrl = await db.collection('dionaeaembedded')
+        .aggregate([
+            {
+                $match: {
+                    local_port: Long.fromString("445"), 
+                    "offer.offer_url": {$regex:/^smb/}
+                }
+            },
+            {
+                $unwind: "$offer"
+            },
+            {
+                $unwind: "$offer.offer_url"
+            },
+            {
+                $group: {
+                    _id: {
+                        offer_url:"$offer.offer_url",
+                        connection_timestamp:{
+                            $toDate: { 
+                                $multiply:["$connection_timestamp", 1000 ] }}
+                        },
+                    count: { 
+                        $sum: 1}
+                }
+            },
+            {
+                $project: {
+                    offer_url:"$_id.offer_url",
+                    connection_timestamp:"$_id.connection_timestamp",
+                    count: "$count"
+                }
+            },
+            {
+                $sort: {
+                    count: -1
+                }
+            },
+            {
+                $limit: 10
+            }
+          ]).toArray()
+    },
+
+    connections: async () => { //menampilkan konversi timestamp dan mengurutkannya berdasarkan perhitungan jumlah serangan yang terjadi
       return Connection = await db.collection('dionaeaembedded')
       .aggregate([
         {
-          $match: {
-              local_port: Long.fromString("445")
-          }
+            $match: {
+                local_port: Long.fromString("445"), 
+                "offer.offer_url": {$regex:/^smb/}
+            }
         },
         {
-           $group: {
+            $unwind: "$offer"
+        },
+        {
+            $unwind: "$offer.offer_url"
+        },
+        {
+            $group: {
                 _id: {
-                    connection_timestamp:"$connection_timestamp"
-                },
-                count: {
-                    $sum : 1
-                }
+                    connection_timestamp:{
+                        $toDate: { 
+                            $multiply:["$connection_timestamp", 1000 ] }}
+                    },
+                count: { 
+                    $sum: 1}
             }
         },
         {
             $project: {
                 count: "$count",
-                connection_timestamp: "$_id.connection_timestamp",
-                _id: 0
+                connection_timestamp: {$dateToString: { format: "%Y-%m-%d", date: "$_id.connection_timestamp" }}
             }
         },
         {
-          $sort: {
-            connection_timestamp: -1}
-        },
-        {
-          $limit : 10
+            $sort: {
+                connection_timestamp: 1
+            }
         }
-      ],
-      {allowDiskUse: true}).toArray()
-    },*/
+      ]).toArray()
+    },
     
     remote_host: async () => { //menampilkan urutan data top 10 IP
       return RemoteHost = await db.collection('dionaeaembedded')
@@ -103,113 +235,48 @@ const resolvers = {
         }
       ]).toArray()
     },
-
-    malwares: async () => { //menampilkan urutan data top 10 malware yang telah diunduh oleh Dionaea
-      return Malware = await db.collection('dionaeaembedded')
-      .aggregate([
-        {
-            $match: {
-                local_port: Long.fromString("445")
-            }
-        },
-        {
-            $unwind: "$download"
-        },
-        {
-            $unwind: "$download.download_md5_hash"
-        },
-        {
-            $group: {
-                _id: {
-                    local_port:"$local_port", 
-                    download_md5_hash:"$download.download_md5_hash"
-                },
-                count: {
-                    $sum : 1
-                }
-            }
-        },
-        {
-            $project: {
-                count: "$count",            
-                local_port: "$_id.local_port",
-                download_md5_hash: "$_id.download_md5_hash",
-                _id: 0
-            }
-        },
-        {
-            $sort:{
-                count:-1
-            }
-        },
-        {
-            $limit:10
-        }
-      ]).toArray()
-    },
-
-    smburls: async () => { //menampilkan data offer_url yang memiliki url berisi "smb"
-      return SMBUrl = await db.collection('dionaeaembedded')
-      .aggregate([
-        {
-            $match: {
-                local_port: Long.fromString("445"), 
-                "offer.offer_url": {$regex:/^smb/}
-            }
-        },
-        {
-            $unwind: "$offer"
-        },
-        {
-            $unwind: "$offer.offer_url"
-        },
-        {
-            $group: {
-                _id: {
-                    local_port:"$local_port", 
-                    remote_host:"$remote_host",
-                    offer_url:"$offer.offer_url"
-                },
-                count: {
-                    $sum : 1
-                }
-            }
-        },
-        {
-            $project: {
-                count: "$count",            
-                local_port: "$_id.local_port",
-                remote_host:"$_id.remote_host",
-                offer_url: "$_id.offer_url",
-                _id: 0
-            }
-        },
-        {
-            $sort:{
-                count:-1
-            }
-        }
-      ]).toArray()
-    },
-
-    classification: async () => { //
-      return Classification = await db.collection('dionaeaembedded')
-      .aggregate([
-        {$match: {local_port: 445}},
-        {$unwind: "$offer"},
-        {$unwind: "$offer.offer_url"},
-        {$group: {_id: {local_port:"$local_port", offer_url:"$offer.offer_url", remote_host:"remote_host"}}},
-        {$project:{
-            local_port:"$_id.local_port", 
-            offer_url:"$_id.offer_url", 
-            remote_host:"remote_host", 
-            classification : {
-                $cond : {
-                    if : { $regexMatch: {input: "$_id.offer_url", regex: /^smb/, options: "i" }},
-                    then : "Phishing Style Attack",
-                    else : "Undefined"
+    
+    malwares: async () => { //menampilkan urutan data top 10 malware
+        return Malware = await db.collection('dionaeaembedded')
+        .aggregate([
+                {
+                    $match: {
+                        local_port: Long.fromString("445")
                     }
-                }}}
+                },
+                {
+                    $unwind: "$download"
+                },
+                {
+                    $unwind: "$download.download_md5_hash"
+                },
+                {
+                    $group: {
+                        _id: {
+                            local_port:"$local_port", 
+                            download_md5_hash:"$download.download_md5_hash"
+                        },
+                        count: {
+                            $sum : 1
+                        }
+                    }
+                },
+                {
+                    $project: {
+                        count: "$count",            
+                        local_port: "$_id.local_port",
+                        download_md5_hash: "$_id.download_md5_hash",
+                        _id: 0
+                    }
+                },
+                {
+                    $sort:{
+                        count:-1
+                    }
+                },
+                {
+                    $limit:10
+                }
         ]).toArray()
     }
   }

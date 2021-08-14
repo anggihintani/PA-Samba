@@ -4,54 +4,36 @@ const typeDefs = gql`
 
 scalar ISODateTime
 
-scalar JSON
+scalar ISODate
+
+scalar ISOTime
 
   type Query {
-    sambas: [Samba]
-    total_remote_host: [TRemoteHost]
-    remote_host: [RemoteHost]
-    connection_timestamp: [Connection]
-    malwares: [Malware]
+    classifications: [Classification]
     smburls: [SMBUrl]
-    classification: [Classification]
+    top_smburl: [TopSMBUrl]
+    connections: [Connection]
+    remote_host: [RemoteHost]
+    malwares: [Malware]
   }
 
-  type Samba {
-    _id: String
-    connection: Int
-    connection_type: String
+  type Classification {
+    local_port: Int
     connection_protocol: String
+    remote_host: String
     connection_timestamp: ISODateTime
-    local_port: Int
-    remote_host: String
-    download: [Download]
-    offer: [Offer]
+    offer_url: String
+    classification: String
   }
-
-  type Download {
-    download: Int
-    download_url: String
-    download_md5_hash: String
-  }
-
-  type TRemoteHost {
-    local_port: Int
-    remote_host: String
-    count: Int
-  }
-
-  type RemoteHost {
-    remote_host: String
-    count: Int
-  }
-
-  type Connection {
+  
+  type SMBUrl {
     connection_timestamp: ISODateTime
-    count: Int
+    offer_url: [String]
   }
 
-  type Malware {
-    download_md5_hash: String
+  type TopSMBUrl {
+    offer_url: String
+    connection_timestamp: ISODateTime
     count: Int
   }
 
@@ -60,15 +42,26 @@ scalar JSON
     offer_url: String
   }
 
-  type SMBUrl {
-    offer_url: String
+  type Connection {
+    connection_timestamp: ISODate
+    count: Int
+  }
+
+  type RemoteHost {
     remote_host: String
     count: Int
   }
 
-  type Classification {
-    offer_url: String
+  type Malware {
+    local_port: Int
     count: Int
+    download_md5_hash: String
+  }
+
+  type Download {
+    download: Int
+    download_url: String
+    download_md5_hash: String
   }
 `
 
